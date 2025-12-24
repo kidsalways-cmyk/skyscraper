@@ -1,0 +1,885 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, collection, doc, onSnapshot, updateDoc, setDoc, getDoc, arrayUnion 
+} from 'firebase/firestore';
+import { 
+  getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken 
+} from 'firebase/auth';
+import { 
+  Snowflake, Gift, Share2, RotateCw, RefreshCcw, Sparkles, UserPlus, Check, Copy, Star, PartyPopper, Volume2, VolumeX, AlertCircle, Users, Settings 
+} from 'lucide-react';
+
+// --- Firebase Configuration ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'christmas-wheel';
+
+// --- Constants ---
+const ROOM_COLLECTION = 'rooms'; 
+const COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308', 
+  '#84cc16', '#22c55e', '#10b981', '#06b6d4', 
+  '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', 
+  '#a855f7', '#ec4899', '#f43f5e', '#d946ef', 
+];
+
+// Audio Sources - Replaced with stable Pixabay MP3s
+const BGM_SRC = "https://cdn.pixabay.com/audio/2022/11/22/audio_febc508520.mp3"; 
+const SFX_DRUMROLL = "https://cdn.pixabay.com/audio/2022/03/10/audio_c23a23330f.mp3"; 
+const SFX_WIN = "https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c7443c.mp3"; 
+
+// Enhanced Avatar Lists
+const BOY_AVATARS = ['👦', '🧑‍🎄', '🧝', '💂‍♂️', '🤴', '🦸‍♂️', '🧙‍♂️', '🧔', '☃️', '🦌', '🤠', '👮‍♂️'];
+const GIRL_AVATARS = ['👧', '🤶', '🧝‍♀️', '👸', '🧚‍♀️', '🦸‍♀️', '🧙‍♀️', '👱‍♀️', '☃️', '🦌', '👩‍🚀', '👮‍♀️'];
+
+// --- Helper Components ---
+
+// Snow Effect & New Animations
+const GlobalStyles = () => {
+  return (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      {/* 1. Ultra Vivid Background - Christmas Night Theme */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0f172a] to-black"></div>
+      
+      {/* Colorful Atmosphere Blobs (Aurora effect) */}
+      <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-red-600/20 rounded-full blur-[120px] mix-blend-screen animate-pulse-slow"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-green-600/20 rounded-full blur-[120px] mix-blend-screen animate-pulse-slow" style={{animationDelay: '-5s'}}></div>
+      <div className="absolute top-[40%] left-[40%] w-[40%] h-[40%] bg-yellow-500/10 rounded-full blur-[100px] mix-blend-screen animate-pulse"></div>
+      <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-500/20 rounded-full blur-[80px] mix-blend-screen"></div>
+
+      {/* Stardust texture */}
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50"></div>
+      
+      {/* 2. Distant Christmas Trees Silhouette */}
+      <div className="absolute bottom-0 left-0 right-0 h-48 bg-repeat-x bg-contain opacity-60 mix-blend-overlay" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 300' preserveAspectRatio='none'%3E%3Cpath d='M0,300 L0,250 L50,200 L25,200 L75,150 L50,150 L100,100 L75,100 L150,25 L225,100 L200,100 L250,150 L225,150 L275,200 L250,200 L300,250 L350,200 L325,200 L375,150 L350,150 L400,100 L375,100 L450,25 L525,100 L500,100 L550,150 L525,150 L575,200 L550,200 L600,250 L650,200 L625,200 L675,150 L650,150 L700,100 L675,100 L750,25 L825,100 L800,100 L850,150 L825,150 L875,200 L850,200 L900,250 L950,200 L925,200 L975,150 L950,150 L1000,100 L975,100 L1050,25 L1125,100 L1100,100 L1150,150 L1125,150 L1175,200 L1150,200 L1200,250 L1200,300 Z' fill='%23111827'/%3E%3C/svg%3E")` }}></div>
+
+      {/* 3. Enhanced Snowflakes */}
+      {[...Array(60)].map((_, i) => {
+        const size = Math.random() * 12 + 4;
+        const duration = Math.random() * 15 + 10;
+        const delay = Math.random() * 20;
+        return (
+        <div
+          key={i}
+          className="absolute text-white animate-fall"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: `-${Math.random() * 20}%`,
+            opacity: Math.random() * 0.8 + 0.2,
+            fontSize: `${size}px`,
+            filter: `blur(${Math.random()}px)`,
+            animationDuration: `${duration}s`,
+            animationDelay: `-${delay}s`,
+            textShadow: '0 0 8px rgba(255,255,255,0.9)'
+          }}
+        >
+          ❄
+        </div>
+      )})}
+
+      {/* 4. Twinkling Lights Overlay */}
+      <div className="absolute inset-0 animate-twinkle opacity-50 mix-blend-overlay pointer-events-none" style={{backgroundImage: 'radial-gradient(circle, #fde68a 3px, transparent 3px)', backgroundSize: '80px 80px'}}></div>
+
+      <style>{`
+        @keyframes fall {
+          0% { transform: translateY(0) rotate(0deg); }
+          100% { transform: translateY(110vh) rotate(360deg); }
+        }
+        .animate-fall {
+          animation-name: fall;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        .animate-twinkle {
+            animation: twinkle 4s ease-in-out infinite;
+        }
+        
+        /* Rotation Animations */
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 60s linear infinite; /* Idle Clockwise Spin */
+        }
+
+        @keyframes spin-reverse-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(-360deg); }
+        }
+        .animate-counter-spin-slow {
+          animation: spin-reverse-slow 60s linear infinite; /* Counter-rotate Cabins */
+        }
+        
+        /* Light Effects */
+        .wheel-shadow {
+            filter: drop-shadow(0 25px 40px rgba(0,0,0,0.7));
+        }
+        .cabin-shadow {
+            box-shadow: inset 0 0 15px rgba(255,255,255,0.4), 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .text-glow {
+            text-shadow: 0 0 10px rgba(253, 224, 71, 0.6), 0 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        /* Fast Flash for Spinning State */
+        @keyframes flash-fast {
+            0%, 100% { opacity: 1; filter: brightness(1.5); }
+            50% { opacity: 0.5; filter: brightness(0.8); }
+        }
+        .animate-flash-fast {
+            animation: flash-fast 0.2s linear infinite;
+        }
+        
+        /* Background Strobing for Spin */
+        @keyframes bg-strobe {
+            0%, 100% { background-color: rgba(255,0,0,0.1); }
+            33% { background-color: rgba(0,255,0,0.1); }
+            66% { background-color: rgba(0,0,255,0.1); }
+        }
+        .animate-bg-strobe {
+            animation: bg-strobe 0.5s linear infinite;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// --- Main Application Component ---
+
+export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const [roomId, setRoomId] = useState<string>('');
+  const [targetCabins, setTargetCabins] = useState<number>(16); // Default select value
+  const [isInRoom, setIsInRoom] = useState(false);
+  const [roomData, setRoomData] = useState<any>(null);
+  const [localName, setLocalName] = useState('');
+  const [localGender, setLocalGender] = useState<'boy' | 'girl'>('boy');
+  const [selectedCabin, setSelectedCabin] = useState<number | null>(null);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showWinnerModal, setShowWinnerModal] = useState(false);
+  const [addSuccess, setAddSuccess] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [skipEmpty, setSkipEmpty] = useState(false);
+  
+  // Wheel Animation State
+  const [rotation, setRotation] = useState(0);
+  
+  // Audio Refs
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const spinSfxRef = useRef<HTMLAudioElement | null>(null);
+  const winSfxRef = useRef<HTMLAudioElement | null>(null);
+
+  // --- Auth & Room Logic ---
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            try {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } catch (customTokenError) {
+                console.warn("Custom token auth failed, falling back to anonymous:", customTokenError);
+                await signInAnonymously(auth);
+            }
+        } else {
+            await signInAnonymously(auth);
+        }
+      } catch (error: any) {
+        console.error("Authentication failed:", error);
+        setAuthError("連線驗證失敗，請重新整理頁面試試看");
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!roomId || !user || !isInRoom) return;
+
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', ROOM_COLLECTION, roomId);
+
+    const unsubscribe = onSnapshot(roomRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setRoomData(data);
+        
+        // Sync rotation animation
+        if (data.rotation !== undefined && data.rotation !== rotation) {
+          setRotation(data.rotation);
+        }
+        
+        // Handle Winner Modal Timing
+        if (data.winner !== undefined && data.winner !== null && data.showWinner) {
+           setTimeout(() => setShowWinnerModal(true), 4000); // Show winner after spin ends
+        } else {
+           setShowWinnerModal(false);
+        }
+      }
+    }, (error) => {
+        console.error("Firestore snapshot error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [roomId, user, isInRoom]);
+
+  // --- SFX Logic ---
+  useEffect(() => {
+      if (roomData?.winner !== null && roomData?.winner !== undefined && !showWinnerModal) {
+          if (spinSfxRef.current) {
+              spinSfxRef.current.currentTime = 0;
+              spinSfxRef.current.play().catch(e => console.log("Auto-play prevented"));
+          }
+      } else {
+          if (spinSfxRef.current) {
+              spinSfxRef.current.pause();
+              spinSfxRef.current.currentTime = 0;
+          }
+      }
+
+      if (showWinnerModal && winSfxRef.current) {
+          winSfxRef.current.currentTime = 0;
+          winSfxRef.current.play().catch(e => console.log("Auto-play prevented"));
+      }
+  }, [roomData?.winner, showWinnerModal]);
+
+
+  const createOrJoinRoom = async () => {
+    if (!roomId.trim() || !user) return;
+    
+    // Normalize Room ID
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', ROOM_COLLECTION, cleanRoomId);
+    
+    try {
+        const snap = await getDoc(roomRef);
+
+        if (!snap.exists()) {
+            // Initialize new room with SELECTED number of cabins
+            const initialCabins: Record<string, any> = {};
+            for(let i=0; i < targetCabins; i++) {
+                initialCabins[i.toString()] = {
+                    id: i,
+                    occupants: [] 
+                };
+            }
+            
+            await setDoc(roomRef, {
+                cabins: initialCabins,
+                totalCabins: targetCabins, // Store configuration
+                rotation: 0,
+                winner: null,
+                showWinner: false,
+                lastUpdated: new Date().toISOString()
+            });
+        }
+        setRoomId(cleanRoomId);
+        setIsInRoom(true);
+    } catch (err) {
+        console.error("Error joining room:", err);
+    }
+  };
+
+  const joinCabin = async () => {
+    if (selectedCabin === null || !localName || !user) return;
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', ROOM_COLLECTION, cleanRoomId);
+    
+    try {
+        const avatarPool = localGender === 'boy' ? BOY_AVATARS : GIRL_AVATARS;
+        const randomAvatar = avatarPool[Math.floor(Math.random() * avatarPool.length)];
+
+        const cabinPath = `cabins.${selectedCabin}.occupants`;
+        await updateDoc(roomRef, {
+            [cabinPath]: arrayUnion({
+                name: localName,
+                gender: localGender,
+                avatar: randomAvatar,
+                uid: user.uid
+            })
+        });
+        
+        setAddSuccess(true);
+        setTimeout(() => setAddSuccess(false), 2000);
+        setLocalName('');
+    } catch (err) {
+        console.error("Error joining cabin:", err);
+    }
+  };
+
+  const spinWheel = async () => {
+    if (!roomData) return;
+    
+    // Use room's configured cabin count or default to 16
+    const currentTotalCabins = roomData.totalCabins || 16;
+    let availableIndices: number[] = [];
+
+    // Filter Logic for Skipping Empty Cabins
+    if (skipEmpty) {
+        for (let i = 0; i < currentTotalCabins; i++) {
+            const cabin = Array.isArray(roomData.cabins) 
+                ? roomData.cabins[i] 
+                : roomData.cabins[i.toString()];
+            
+            if (cabin?.occupants?.length > 0) {
+                availableIndices.push(i);
+            }
+        }
+        
+        if (availableIndices.length === 0) {
+             alert("所有車廂都是空的，無法進行有效抽獎！(將隨機轉動)");
+             availableIndices = Array.from({length: currentTotalCabins}, (_, i) => i);
+        }
+    } else {
+        availableIndices = Array.from({length: currentTotalCabins}, (_, i) => i);
+    }
+    
+    const randomIndex = Math.floor(Math.random() * availableIndices.length);
+    const winningIndex = availableIndices[randomIndex];
+
+    const sliceAngle = 360 / currentTotalCabins;
+    const currentRot = roomData.rotation || 0;
+    
+    const targetAngle = - (winningIndex * sliceAngle);
+    // Keep it spinning forward significantly
+    const finalRotation = currentRot + 1800 + (360 - (currentRot % 360)) - (winningIndex * sliceAngle);
+
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', ROOM_COLLECTION, roomId), {
+      rotation: finalRotation,
+      winner: winningIndex,
+      showWinner: true 
+    });
+  };
+
+  const resetGame = async () => {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', ROOM_COLLECTION, roomId), {
+      winner: null,
+      showWinner: false
+    });
+  };
+
+  const clearCabin = async (cabinIndex: number) => {
+    if(!roomData) return;
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', ROOM_COLLECTION, roomId);
+    const cabinPath = `cabins.${cabinIndex}.occupants`;
+    await updateDoc(roomRef, { [cabinPath]: [] });
+  };
+
+  const handleCopyRoomId = () => {
+      const text = roomId;
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        const successful = document.execCommand('copy');
+        if(successful) {
+            setCopySuccess(true);
+            setTimeout(() => setCopySuccess(false), 2000);
+        }
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+      }
+      document.body.removeChild(textArea);
+  };
+
+  const toggleMusic = () => {
+    if (!bgmRef.current) return;
+    
+    if (isMusicPlaying) {
+      bgmRef.current.pause();
+      setIsMusicPlaying(false);
+    } else {
+      const playPromise = bgmRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          setIsMusicPlaying(true);
+        }).catch(error => {
+          console.error("Audio playback error:", error);
+          alert("音樂播放失敗，請檢查瀏覽器設定或重新整理。");
+          setIsMusicPlaying(false);
+        });
+      }
+    }
+  };
+
+  // --- Render Helpers ---
+
+  const isIdle = roomData && roomData.winner === null;
+  const isSpinning = roomData && roomData.winner !== null && !showWinnerModal;
+
+  if (authError) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-white">
+            <div className="bg-red-900/50 p-6 rounded-xl border border-red-500 text-center">
+                <h3 className="text-xl font-bold mb-2">連線發生錯誤</h3>
+                <p>{authError}</p>
+                <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-white text-red-900 rounded hover:bg-gray-100">
+                    重新整理
+                </button>
+            </div>
+        </div>
+      );
+  }
+
+  if (!isInRoom) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+        <GlobalStyles />
+        <div className="z-10 bg-white/20 backdrop-blur-xl p-8 rounded-[2rem] border border-white/30 shadow-[0_0_80px_rgba(255,255,255,0.15)] max-w-md w-full text-center relative overflow-hidden group">
+          
+          {/* Decorative glow */}
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 via-green-500 to-red-500"></div>
+          
+          <div className="absolute -top-6 -right-6 text-yellow-300 animate-pulse"><Star size={50} fill="currentColor" /></div>
+          <div className="absolute -bottom-6 -left-6 text-yellow-300 animate-pulse delay-700"><Star size={40} fill="currentColor" /></div>
+
+          <div className="mb-6 flex justify-center">
+             <div className="w-32 h-32 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center shadow-2xl border-[6px] border-yellow-400 relative group-hover:scale-105 transition-transform duration-500">
+                <div className="absolute inset-0 rounded-full border-2 border-white/30 animate-ping opacity-20"></div>
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>
+                <Gift className="w-16 h-16 text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.3)]" />
+                <Sparkles className="absolute top-2 right-2 text-yellow-200 animate-pulse" size={20} />
+             </div>
+          </div>
+          
+          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-200 via-white to-yellow-100 mb-2 drop-shadow-md tracking-tight">
+            Sonia's <br/> Class
+          </h1>
+          <p className="text-blue-100 mb-6 font-medium tracking-wide text-lg border-b border-white/10 pb-4">
+            🎄 聖誕摩天輪互動抽獎 🎅
+          </p>
+          
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              placeholder="輸入房間號碼 (例如: XMAS)"
+              className="w-full px-6 py-4 rounded-2xl bg-black/30 text-white placeholder-white/40 focus:outline-none focus:ring-4 focus:ring-yellow-400/50 transition-all text-center text-xl font-bold uppercase border-2 border-white/10 backdrop-blur-sm"
+            />
+            
+            {/* Cabin Count Selector */}
+            <div className="bg-black/30 p-2 rounded-xl border border-white/10 flex items-center justify-between px-4">
+                <span className="text-white/80 text-sm font-bold flex items-center gap-2">
+                    <Settings size={16} /> 車廂數量
+                </span>
+                <div className="flex gap-1">
+                    {[8, 16, 24, 32].map(count => (
+                        <button 
+                            key={count}
+                            onClick={() => setTargetCabins(count)}
+                            className={`px-3 py-1 rounded-lg text-sm font-bold transition ${targetCabins === count ? 'bg-yellow-500 text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                        >
+                            {count}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <button
+              onClick={createOrJoinRoom}
+              disabled={!roomId}
+              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white rounded-2xl font-black text-xl shadow-[0_10px_20px_rgba(16,185,129,0.3)] transform transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 border-b-4 border-green-800 group"
+            >
+              <PartyPopper className="w-7 h-7 group-hover:rotate-12 transition-transform" />
+              進入樂園
+            </button>
+            <p className="text-white/40 text-xs mt-2">若房間已存在，將自動使用該房間的設定</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Determine actual cabins based on room data or default
+  const currentTotalCabins = roomData?.totalCabins || 16;
+  
+  const renderedCabins = Array.from({ length: currentTotalCabins }, (_, i) => {
+      if (Array.isArray(roomData?.cabins)) {
+          return roomData.cabins[i] || { id: i, occupants: [] };
+      }
+      return roomData?.cabins?.[i.toString()] || { id: i, occupants: [] };
+  });
+
+  // Dynamic Sizing based on Cabin Count
+  // Default (16): w-[400px] sm:w-[640px] wheel, w-[50px] sm:w-[65px] cabin
+  let wheelSizeClass = "w-[400px] h-[400px] sm:w-[640px] sm:h-[640px]";
+  let cabinSizeClass = "w-[50px] h-[50px] sm:w-[65px] sm:h-[65px]";
+  let cabinOriginClass = "origin-[50%_200px] sm:origin-[50%_320px]";
+  let cabinMarginClass = "-ml-[25px] sm:-ml-[32.5px]";
+  let centerHubSizeClass = "w-28 h-28 sm:w-36 sm:h-36";
+  let avatarSize = { fontSize: '1.1rem' };
+  let avatarContainerClass = "p-0.5 gap-0.5 mt-1.5";
+
+  if (currentTotalCabins <= 8) {
+      // Larger cabins for fewer counts
+      cabinSizeClass = "w-[70px] h-[70px] sm:w-[90px] sm:h-[90px]";
+      cabinMarginClass = "-ml-[35px] sm:-ml-[45px]";
+      avatarSize = { fontSize: '1.3rem' };
+      avatarContainerClass = "p-1 gap-1 mt-2";
+  } else if (currentTotalCabins >= 32) {
+      // Smaller cabins for max count to fit
+      cabinSizeClass = "w-[30px] h-[30px] sm:w-[45px] sm:h-[45px]";
+      cabinMarginClass = "-ml-[15px] sm:-ml-[22.5px]";
+      avatarSize = { fontSize: '0.8rem' };
+      avatarContainerClass = "p-0.5 gap-0 mt-0.5";
+  } else if (currentTotalCabins >= 24) {
+      // Medium-Small
+      cabinSizeClass = "w-[40px] h-[40px] sm:w-[55px] sm:h-[55px]";
+      cabinMarginClass = "-ml-[20px] sm:-ml-[27.5px]";
+      avatarSize = { fontSize: '0.9rem' };
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-hidden font-sans">
+      <GlobalStyles />
+      
+      {/* Background Strobe Effect during Spin */}
+      {isSpinning && <div className="absolute inset-0 animate-bg-strobe pointer-events-none z-0"></div>}
+
+      {/* Audio Elements - Using reliable MP3s with onError logging */}
+      <audio 
+        ref={bgmRef} 
+        loop 
+        src={BGM_SRC} 
+        onError={(e) => console.log("BGM Error:", e)} 
+      />
+      <audio 
+        ref={spinSfxRef} 
+        src={SFX_DRUMROLL} 
+        onError={(e) => console.log("Spin SFX Error:", e)} 
+      />
+      <audio 
+        ref={winSfxRef} 
+        src={SFX_WIN} 
+        onError={(e) => console.log("Win SFX Error:", e)} 
+      />
+      
+      {/* Header */}
+      <header className="z-20 p-4 flex justify-between items-center bg-black/10 backdrop-blur-md border-b border-white/5 sticky top-0">
+        <div className="flex items-center gap-3 text-white">
+            <div className="bg-gradient-to-br from-red-600 to-red-800 p-2 rounded-xl shadow-lg shadow-red-900/20 rotate-3 border border-red-400/30">
+                <Gift className="text-white" size={20} />
+            </div>
+            <div className="flex flex-col">
+                <span className="text-xs text-white/50 font-bold tracking-wider uppercase">Current Room</span>
+                <span className="font-black text-xl text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-400 font-mono tracking-wider">{roomId}</span>
+            </div>
+        </div>
+        <div className="flex gap-2">
+            <button 
+                onClick={toggleMusic}
+                className={`w-10 h-10 rounded-full border border-white/10 transition flex items-center justify-center backdrop-blur-sm ${isMusicPlaying ? 'bg-green-500/20 text-green-400' : 'bg-white/5 hover:bg-white/10 text-white'}`}
+                title={isMusicPlaying ? "關閉音樂" : "播放音樂"}
+            >
+                {isMusicPlaying ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            <button 
+                onClick={handleCopyRoomId}
+                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 transition flex items-center justify-center backdrop-blur-sm"
+                title="複製房間號碼"
+            >
+                {copySuccess ? <Check size={18} className="text-green-400" /> : <Share2 size={18} />}
+            </button>
+            <button 
+                onClick={() => {
+                    setRoomId('');
+                    setIsInRoom(false);
+                    setRoomData(null);
+                }}
+                className="px-5 py-2 bg-red-600/80 text-white rounded-full text-sm font-bold hover:bg-red-500 transition shadow-lg border border-red-400/50 backdrop-blur-sm"
+            >
+                離開
+            </button>
+        </div>
+      </header>
+
+      {/* Main Content - The Wheel */}
+      <main className="flex-1 flex flex-col items-center justify-center relative z-10 p-4 wheel-shadow perspective-1000">
+        
+        {/* Stand - Rendered FIRST (Behind) */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 mt-[80px] sm:mt-[125px] pointer-events-none z-0 flex flex-col items-center">
+             {/* Stand implementation unchanged */}
+             <div className="relative">
+                 <div className="absolute bottom-0 right-[40px] sm:right-[60px] w-[28px] sm:w-[40px] h-[260px] sm:h-[380px] bg-gradient-to-b from-yellow-700 to-yellow-900 origin-bottom rotate-[18deg] border-l-4 border-yellow-600 shadow-2xl">
+                    <div className="absolute top-0 inset-x-0 h-6 bg-white/90 rounded-t-md"></div> 
+                    <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_red]"></div>
+                    <div className="absolute top-2/4 left-1/2 -translate-x-1/2 w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_green]"></div>
+                    <div className="absolute top-3/4 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_blue]"></div>
+                 </div>
+                 <div className="absolute bottom-0 left-[40px] sm:left-[60px] w-[28px] sm:w-[40px] h-[260px] sm:h-[380px] bg-gradient-to-b from-yellow-700 to-yellow-900 origin-bottom rotate-[-18deg] border-r-4 border-yellow-600 shadow-2xl">
+                    <div className="absolute top-0 inset-x-0 h-6 bg-white/90 rounded-t-md"></div> 
+                    <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_green]"></div>
+                    <div className="absolute top-2/4 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_blue]"></div>
+                    <div className="absolute top-3/4 left-1/2 -translate-x-1/2 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_red]"></div>
+                 </div>
+                 <div className="absolute bottom-[100px] sm:bottom-[150px] left-1/2 -translate-x-1/2 w-[140px] sm:w-[200px] h-[14px] bg-yellow-800 border-t border-b border-yellow-600 shadow-lg"></div>
+                 <div className="absolute bottom-[-20px] left-1/2 -translate-x-1/2 w-[280px] sm:w-[400px] h-[60px] bg-gradient-to-b from-red-900 to-black rounded-xl border-t-4 border-slate-600 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex items-end justify-center overflow-hidden">
+                    <div className="w-full h-10 bg-white/95 transform -skew-x-12 scale-110 shadow-inner"></div> 
+                 </div>
+             </div>
+        </div>
+
+        {/* Wheel Container - 3D Structure (Foreground) */}
+        <div className={`relative ${wheelSizeClass} mt-8 mb-20 perspective-1000 z-10`}>
+        
+            {/* LAYER 1: Base Rotation */}
+            <div 
+                className={`w-full h-full relative preserve-3d ${!isIdle ? 'transition-transform duration-[4000ms] cubic-bezier(0.25, 0.1, 0.25, 1)' : ''}`}
+                style={{ 
+                    transform: `rotate(${rotation}deg)`,
+                }}
+            >
+                {/* LAYER 2: Idle Spin Container */}
+                <div 
+                    className={`
+                        w-full h-full relative preserve-3d
+                        ${isIdle ? 'animate-spin-slow' : ''}
+                    `}
+                >
+                    {/* --- 3D Wheel Structure --- */}
+                    
+                    {/* Back Ring */}
+                    <div className="absolute inset-0 rounded-full border-[18px] border-yellow-700/50 shadow-[0_0_30px_rgba(234,179,8,0.1)] translate-z-[-20px]"></div>
+                    
+                    {/* Front Ring (Main) */}
+                    <div className="absolute inset-0 rounded-full border-[18px] border-yellow-500 shadow-[0_0_60px_rgba(234,179,8,0.4)] translate-z-[20px] bg-gradient-to-br from-yellow-500/10 to-transparent">
+                        {/* Decorative Lights on Ring - MULTICOLOR NEON */}
+                        {[...Array(32)].map((_, i) => { 
+                             const colors = ['bg-red-500', 'bg-yellow-400', 'bg-blue-500', 'bg-green-500'];
+                             const colorClass = colors[i % 4];
+                             
+                             return (
+                                <div key={`light-${i}`} className={`absolute w-3 h-3 rounded-full shadow-[0_0_15px_currentColor] ${isSpinning ? 'animate-flash-fast' : 'animate-pulse'} ${colorClass} border border-white/30`}
+                                     style={{
+                                         top: '50%', left: '50%',
+                                         transform: `rotate(${i * (360/32)}deg) translate(0, -${200 - 9}px) sm:translate(0, -${320 - 9}px)`,
+                                         marginLeft: '-6px', marginTop: '-6px',
+                                         animationDelay: `${i * 0.05}s`
+                                     }}></div>
+                            )
+                        })}
+                    </div>
+
+                    {/* Center Hub (Sonia's Class) */}
+                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${centerHubSizeClass} bg-gradient-to-br from-red-700 via-red-600 to-red-800 rounded-full z-20 flex flex-col items-center justify-center shadow-[0_0_60px_rgba(220,38,38,0.6),inset_0_0_20px_rgba(0,0,0,0.3)] border-[8px] border-yellow-400 translate-z-[30px] overflow-hidden group`}>
+                        <div className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-200/50 opacity-70 animate-spin-slow" style={{animationDuration: '20s'}}></div>
+                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent translate-x-[-100%] animate-shimmer"></div>
+                        <div className="absolute inset-0 pointer-events-none">
+                            {[...Array(8)].map((_, i) => (
+                                <Snowflake key={i} size={8} className="text-white absolute animate-fall opacity-80" style={{left: `${Math.random()*100}%`, animationDuration: `${2+Math.random()*2}s`}} />
+                            ))}
+                        </div>
+                        <div className="relative z-10 flex flex-col items-center justify-center transform transition-transform group-hover:scale-105">
+                            <span className="text-[8px] sm:text-[10px] text-yellow-200 font-bold uppercase tracking-widest mb-0.5 drop-shadow-md">Welcome</span>
+                            <h2 className="text-xl sm:text-2xl font-black text-white leading-[0.85] drop-shadow-[0_2px_0_rgba(185,28,28,1)] text-glow font-serif italic">
+                                Sonia's
+                            </h2>
+                            <h2 className="text-base sm:text-lg font-black text-yellow-300 leading-none drop-shadow-[0_2px_0_rgba(180,83,9,1)] tracking-wider mt-0.5 font-serif">
+                                CLASS
+                            </h2>
+                        </div>
+                    </div>
+
+                    {/* Spokes */}
+                    {[...Array(currentTotalCabins)].map((_, i) => (
+                        <div key={`spoke-${i}`} className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-full bg-gradient-to-b from-yellow-300 via-yellow-600 to-yellow-300 shadow-[0_0_10px_rgba(234,179,8,0.3)]" style={{ transform: `rotate(${i * (360 / currentTotalCabins)}deg)` }}></div>
+                    ))}
+
+                    {/* Cabins */}
+                    {renderedCabins.map((cabin: any, index: number) => {
+                        const angle = index * (360 / currentTotalCabins);
+                        const occupants = cabin.occupants || [];
+                        const hasOccupants = occupants.length > 0;
+                        const cabinColor = COLORS[index % COLORS.length]; 
+
+                        return (
+                            <div
+                                key={index}
+                                className={`absolute top-0 left-1/2 ${cabinMarginClass} ${cabinSizeClass} ${cabinOriginClass} cursor-pointer group`}
+                                style={{ 
+                                    transform: `rotate(${angle}deg)`,
+                                    zIndex: 30
+                                }}
+                                onClick={() => {
+                                    setSelectedCabin(index);
+                                    setShowJoinModal(true);
+                                    setAddSuccess(false);
+                                    setLocalName('');
+                                }}
+                            >
+                                <div style={{ transform: `rotate(${-angle}deg)` }} className="w-full h-full flex flex-col items-center">
+                                    <div 
+                                        className={`relative w-full h-full ${!isIdle ? 'transition-transform duration-[4000ms] cubic-bezier(0.25, 0.1, 0.25, 1)' : ''}`}
+                                        style={{ transform: `rotate(${-rotation}deg)` }}
+                                    >
+                                        <div className={`w-full h-full relative ${isIdle ? 'animate-counter-spin-slow' : ''}`}>
+                                            <div className="absolute top-[-20px] left-1/2 w-[3px] h-[20px] bg-gradient-to-b from-gray-400 to-gray-600 -translate-x-1/2 origin-bottom shadow-md">
+                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-yellow-500 border border-yellow-300"></div>
+                                            </div>
+                                            <div 
+                                                className={`
+                                                    ${cabinSizeClass} rounded-[14px] border-[2px]
+                                                    flex flex-col items-center justify-center relative overflow-hidden
+                                                    transition-all duration-300 hover:scale-110 hover:-translate-y-1
+                                                    cabin-shadow
+                                                `}
+                                                style={{
+                                                    borderColor: cabinColor,
+                                                    background: `linear-gradient(135deg, white 0%, white 50%, ${cabinColor}22 100%)`
+                                                }}
+                                            >
+                                                <div className="absolute -top-2 inset-x-0 h-5 bg-white rounded-b-lg opacity-90 shadow-sm z-10"></div>
+                                                <div className="absolute top-0.5 left-0.5 bg-white text-slate-800 text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded-full font-black z-20 border border-slate-200 shadow-md">
+                                                    {index + 1}
+                                                </div>
+                                                {hasOccupants ? (
+                                                    <div className={`flex flex-wrap items-center justify-center content-center w-full h-full ${avatarContainerClass} z-0`}>
+                                                        {occupants.slice(0, 4).map((occ: any, i: number) => {
+                                                            const displayAvatar = occ.avatar || (occ.gender === 'boy' ? '👦' : '👧');
+                                                            return (
+                                                                <div key={i} className={`w-5 h-5 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border shadow-sm bg-white ${occ.gender === 'boy' ? 'border-blue-300' : 'border-pink-300'}`} title={occ.name} style={avatarSize}>
+                                                                    {displayAvatar}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {occupants.length > 4 && (
+                                                            <div className="w-5 h-5 sm:w-7 sm:h-7 rounded-full bg-slate-100 flex items-center justify-center text-[8px] sm:text-[10px] font-bold text-slate-600 border border-slate-300 shadow-md">+{occupants.length - 4}</div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <Gift className="w-8 h-8 sm:w-10 sm:h-10 mt-1 opacity-40 mix-blend-multiply" style={{color: cabinColor}} />
+                                                )}
+                                                <div className="absolute bottom-0 inset-x-0 h-2 flex items-center justify-center px-1" style={{backgroundColor: cabinColor}}>
+                                                    <div className="w-full h-[1px] bg-white/40"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+        
+
+        {/* Controls */}
+        <div className="flex flex-col items-center gap-4 z-20 w-full max-w-sm mt-20 sm:mt-24">
+             {/* Skip Empty Toggle */}
+             <div className="flex items-center gap-2 mb-2 bg-black/60 px-4 py-2 rounded-full backdrop-blur-sm border border-white/20 hover:bg-black/70 transition cursor-pointer" onClick={() => setSkipEmpty(!skipEmpty)}>
+                <div className={`w-5 h-5 rounded flex items-center justify-center border ${skipEmpty ? 'bg-green-500 border-green-500' : 'border-white/50'}`}>
+                    {skipEmpty && <Check size={14} className="text-white" />}
+                </div>
+                <label className="text-white font-bold text-sm cursor-pointer select-none flex items-center gap-1">
+                    <Users size={16} className="text-white/80" />
+                    跳過空車廂 (只抽有人)
+                </label>
+             </div>
+
+             <button
+                onClick={spinWheel}
+                className="w-full bg-gradient-to-r from-red-600 via-amber-500 to-red-600 hover:from-red-500 hover:via-amber-400 hover:to-red-500 text-white font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.5)] flex items-center justify-center gap-3 text-2xl active:scale-95 transition-all border-4 border-amber-300 bg-[length:200%_auto] animate-shimmer group"
+                style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}
+             >
+                <RotateCw size={32} className={`group-hover:rotate-180 transition-transform duration-700 ${isSpinning ? 'animate-spin' : ''}`} />
+                {isSpinning ? '抽獎中...' : 'GO! 抽獎'}
+                <Star size={32} className="text-yellow-200 animate-pulse" fill="currentColor" />
+             </button>
+             
+             {/* Small reset button */}
+             <button 
+                onClick={resetGame}
+                className="text-white/60 text-sm hover:text-white flex items-center gap-2 bg-black/30 px-6 py-3 rounded-full backdrop-blur-md transition-all hover:bg-black/50 border border-white/5 hover:border-white/20 shadow-lg"
+             >
+                <RefreshCcw size={14} /> 重置狀態
+             </button>
+        </div>
+      </main>
+
+      {/* Join Modal - Colorful */}
+      {showJoinModal && selectedCabin !== null && roomData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-[0_0_80px_rgba(0,0,0,0.6)] relative border-4 border-yellow-400 overflow-hidden">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/giftly.png')] opacity-5"></div>
+            <div className="absolute -top-6 -left-6 text-red-500 transform -rotate-12 drop-shadow-lg"><Gift size={48} /></div>
+            <div className="absolute -bottom-6 -right-6 text-green-500 transform rotate-12 drop-shadow-lg"><Snowflake size={48} /></div>
+            <button onClick={() => setShowJoinModal(false)} className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 p-2 bg-slate-50 rounded-full transition-colors z-20">✕</button>
+            <h2 className="text-2xl font-black text-center mb-1 text-slate-800 flex items-center justify-center gap-2 relative z-10"><span className="text-3xl">🎪</span> #{selectedCabin + 1} 號車廂</h2>
+            <div className="h-2 w-28 bg-gradient-to-r from-yellow-400 via-red-500 to-green-500 mx-auto rounded-full mb-6 relative z-10"></div>
+            <div className="mb-6 bg-slate-50 rounded-2xl p-4 max-h-40 overflow-y-auto border-2 border-slate-100 shadow-inner relative z-10">
+                <p className="text-xs text-slate-400 mb-3 uppercase font-bold tracking-wider flex items-center gap-1"><UserPlus size={14} /> 車廂內成員</p>
+                {(() => {
+                   const cabinData = Array.isArray(roomData.cabins) ? roomData.cabins[selectedCabin] : roomData.cabins[selectedCabin.toString()];
+                   const occupants = cabinData?.occupants || [];
+                   if (occupants.length === 0) return <p className="text-sm text-slate-400 text-center py-4 italic">目前空無一人，快來加入！</p>;
+                   return <div className="flex flex-wrap gap-2">{occupants.map((occ: any, idx: number) => { const displayAvatar = occ.avatar || (occ.gender === 'boy' ? '👦' : '👧'); return <span key={idx} className={`text-base px-3 py-1.5 rounded-full border-2 flex items-center gap-2 shadow-sm bg-white ${occ.gender === 'boy' ? 'border-blue-200 text-blue-800' : 'border-pink-200 text-pink-800'}`}><span className="text-2xl">{displayAvatar}</span> <span className="font-bold">{occ.name}</span></span>; })}</div>;
+                })()}
+            </div>
+            <div className="space-y-4 bg-amber-50/50 p-5 rounded-2xl border border-amber-100 relative z-10">
+                <div><label className="block text-sm font-bold text-slate-700 mb-1">您的姓名/暱稱</label><input type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} placeholder="例如: 聖誕小精靈" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-amber-400 focus:ring-4 focus:ring-amber-100 focus:outline-none text-lg font-bold text-center bg-white" onKeyPress={(e) => e.key === 'Enter' && localName && joinCabin()} /></div>
+                <div><label className="block text-sm font-bold text-slate-700 mb-2">選擇身份 (隨機聖誕造型)</label><div className="grid grid-cols-2 gap-3"><button onClick={() => setLocalGender('boy')} className={`py-3 rounded-xl border-b-4 flex flex-col items-center justify-center gap-1 transition-all active:border-b-0 active:translate-y-1 ${localGender === 'boy' ? 'border-blue-500 bg-blue-100 text-blue-800' : 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50'}`}><span className="text-4xl">🧑‍🎄</span><span className="font-bold">男生</span></button><button onClick={() => setLocalGender('girl')} className={`py-3 rounded-xl border-b-4 flex flex-col items-center justify-center gap-1 transition-all active:border-b-0 active:translate-y-1 ${localGender === 'girl' ? 'border-pink-500 bg-pink-100 text-pink-800' : 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50'}`}><span className="text-4xl">🤶</span><span className="font-bold">女生</span></button></div></div>
+                <div className="flex gap-2 pt-2"><button onClick={joinCabin} disabled={!localName} className={`flex-1 text-white py-3.5 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed border-b-4 active:border-b-0 active:translate-y-1 ${addSuccess ? 'bg-green-500 border-green-700' : 'bg-gradient-to-r from-red-500 to-red-600 border-red-800 hover:from-red-400 hover:to-red-500'}`}>{addSuccess ? <><Check size={24} /> 成功加入！</> : <><UserPlus size={24} /> 確認加入車廂</>}</button></div>
+                 {(() => { const cabinData = Array.isArray(roomData.cabins) ? roomData.cabins[selectedCabin] : roomData.cabins[selectedCabin.toString()]; return cabinData?.occupants && cabinData.occupants.length > 0 ? <button onClick={() => { if(confirm('確定要清空這個車廂的所有人嗎？此操作無法復原。')) { clearCabin(selectedCabin); } }} className="w-full py-2.5 border-2 border-slate-200 text-slate-400 rounded-xl hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition font-bold flex items-center justify-center gap-2 mt-2"><RefreshCcw size={16} /> 清空此車廂所有成員</button> : null; })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Winner Modal - EXTREMELY FESTIVE */}
+      {showWinnerModal && roomData && roomData.winner !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in zoom-in duration-500">
+           <div className="relative p-1 rounded-[2rem] shadow-[0_0_100px_rgba(250,204,21,0.6)] w-full max-w-md bg-gradient-to-br from-red-500 via-yellow-400 to-green-500 animate-pulse-slow">
+                <div className="bg-slate-900/95 rounded-[calc(2rem-4px)] p-8 text-center border-4 border-yellow-400 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/giftly.png')] opacity-20 mix-blend-overlay"></div>
+                    <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-500/50 via-transparent to-transparent animate-spin-slow origin-center"></div>
+                    <button onClick={() => setShowWinnerModal(false)} className="absolute top-4 right-4 text-white/50 hover:text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition">✕</button>
+                    <div className="mb-2 flex justify-center text-yellow-400 relative">
+                        <Star size={60} fill="currentColor" className="animate-bounce drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]" />
+                        <Sparkles className="absolute top-0 right-1/3 text-white animate-pulse" />
+                        <Sparkles className="absolute bottom-0 left-1/3 text-white animate-pulse delay-75" />
+                    </div>
+                    <h3 className="text-yellow-200 font-bold uppercase tracking-[0.2em] mb-2 text-sm">Congratulations!</h3>
+                    <h2 className="text-5xl font-black text-white mb-6 drop-shadow-[0_4px_0_#b91c1c] flex flex-col gap-1">
+                        <span className="text-2xl text-red-400">大獎得主是</span>
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-200">第 {roomData.winner + 1} 組</span>
+                    </h2>
+                    <div className="bg-white/10 rounded-3xl p-6 mb-8 backdrop-blur-md border-2 border-white/20 shadow-2xl relative">
+                        {(() => {
+                            const cabin = Array.isArray(roomData.cabins) ? roomData.cabins[roomData.winner] : roomData.cabins[roomData.winner.toString()];
+                            if (cabin?.occupants && cabin.occupants.length > 0) {
+                                return <div className="flex flex-wrap justify-center gap-4">{cabin.occupants.map((occ: any, idx: number) => { const displayAvatar = occ.avatar || (occ.gender === 'boy' ? '👦' : '👧'); return <div key={idx} className="flex flex-col items-center animate-in slide-in-from-bottom-4 fade-in duration-500" style={{animationDelay: `${idx * 100}ms`}}><div className={`w-16 h-16 rounded-full flex items-center justify-center text-4xl shadow-[0_0_20px_rgba(0,0,0,0.5)] mb-2 border-4 ${occ.gender === 'boy' ? 'bg-blue-100 border-blue-400' : 'bg-pink-100 border-pink-400'} transform hover:scale-110 transition`}>{displayAvatar}</div><span className="text-white text-base font-bold bg-black/40 px-3 py-1 rounded-full">{occ.name}</span></div>; })}</div>;
+                            } else {
+                                return <div className="text-white/60 italic flex flex-col items-center gap-2 py-4"><Gift size={40} className="text-slate-500" />哎呀！這個幸運車廂是空的。</div>;
+                            }
+                        })()}
+                    </div>
+                    <button onClick={() => setShowWinnerModal(false)} className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-black text-xl px-10 py-4 rounded-full hover:from-yellow-300 hover:to-orange-400 transition shadow-[0_10px_20px_rgba(234,179,8,0.4)] hover:shadow-[0_15px_30px_rgba(234,179,8,0.6)] transform active:scale-95 border-b-4 border-orange-700">恭喜大家！🎉</button>
+                </div>
+           </div>
+        </div>
+      )}
+      
+      {/* Footer Text */}
+      <div className="absolute bottom-2 left-0 w-full text-center text-white/40 text-xs pointer-events-none pb-safe font-bold tracking-widest uppercase">
+         Designed for Sonia's Class
+      </div>
+    </div>
+  );
+}
